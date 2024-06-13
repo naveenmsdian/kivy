@@ -5,7 +5,6 @@ from pathlib import Path
 import subprocess
 
 # Streamlit UI
-
 st.title("Kivy to Android APK Converter")
 
 st.markdown("""
@@ -19,8 +18,8 @@ uploaded_file = st.file_uploader("Upload Kivy project zip file", type="zip")
 if uploaded_file:
     # Define paths
     project_dir = Path("kivy_project")
-    build_dir = project_dir / "buildozer"
-    apk_dir = build_dir / "bin"
+    build_dir = project_dir / ".buildozer"
+    apk_dir = build_dir / "android" / "platform" / "build" / "outputs" / "apk"
 
     # Clear previous builds
     if project_dir.exists():
@@ -58,11 +57,24 @@ if uploaded_file:
         st.write("Starting APK build process...")
 
         # Run buildozer command to build APK
-        build_command = "buildozer android debug"
-        process = subprocess.Popen(build_command.split(), cwd=project_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        build_command = "buildozer -v android debug"
+        process = subprocess.Popen(build_command.split(), cwd=project_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         with st.spinner('Building APK...'):
+            build_output = ""
+            for line in iter(process.stdout.readline, ''):
+                build_output += line
+                st.text(line.strip())
+
             stdout, stderr = process.communicate()
+            
+            # Write full logs to a temporary file
+            log_file = project_dir / "build_output.log"
+            with open(log_file, "w") as f:
+                f.write(build_output)
+                f.write("\nStandard Error:\n")
+                f.write(stderr)
+
             if process.returncode == 0:
                 st.success("APK build completed successfully!")
                 # Locate the built APK
@@ -80,5 +92,13 @@ if uploaded_file:
                 else:
                     st.error("No APK file found in the build output.")
             else:
-                st.error(f"APK build failed: {stderr.decode('utf-8')}")
+                st.error("APK build failed. Check the build logs for more details.")
+                st.error(stderr)
+                st.write("You can download the full build log here:")
+                with open(log_file, "rb") as f:
+                    st.download_button("Download Build Log", f, "build_output.log")
 
+        # Display a link to download the build log
+        st.write("You can download the full build log here:")
+        with open(log_file, "rb") as f:
+            st.download_button("Download Build Log", f, "build_output.log")
